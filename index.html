@@ -20,7 +20,7 @@
         <div style="display: none;">
             <video class="input_video"></video>
         </div>
-        <canvas class="output_canvas" width="1080" height="720"></canvas>
+        <canvas class="output_canvas" width="900" height="720"></canvas>
         <div id="fingerCount">Fingers Raised: 0</div>
         <button id="startButton">Start Camera</button>
     </div>
@@ -115,7 +115,7 @@
                     onFrame: async () => {
                         await hands.send({ image: videoElement });
                     },
-                    width: 1080,
+                    width: 900,
                     height: 720
                 });
                 camera.start();
