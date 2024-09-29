@@ -32,7 +32,7 @@
 <body>
     <div class="container">
         <div style="display: none;">
-            <video class="input_video"></video>
+            <video class="input_video" playsinline></video>
         </div>
         <canvas class="output_canvas"></canvas>
         <div id="fingerCount">Fingers Raised: 0</div>
@@ -41,16 +41,18 @@
     <script type="module">
         // Function to determine device type based on screen width
         function isMobileDevice() {
-            return window.innerWidth <= 768; // You can adjust the breakpoint as needed
+            return window.innerWidth <= 768; // Adjust the breakpoint as needed
         }
 
         // Set canvas and camera dimensions based on device type
         let canvasWidth, canvasHeight;
+        let mobileDevice = isMobileDevice();
 
         function setCanvasDimensions() {
-            if (isMobileDevice()) {
-                canvasWidth = 480;
-                canvasHeight = 720;
+            mobileDevice = isMobileDevice();
+            if (mobileDevice) {
+                canvasWidth = 720;
+                canvasHeight = 1080;
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -65,16 +67,20 @@
         // Initial setup
         setCanvasDimensions();
 
-        // Handle window resize
+        // Handle window resize with debounce
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            setCanvasDimensions();
-            // Restart camera with new dimensions
-            if (camera) {
-                camera.stop();
-                camera.width = canvasWidth;
-                camera.height = canvasHeight;
-                camera.start();
-            }
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                setCanvasDimensions();
+                // Restart camera with new dimensions
+                if (camera) {
+                    camera.stop();
+                    camera.width = canvasWidth;
+                    camera.height = canvasHeight;
+                    camera.start();
+                }
+            }, 300); // 300ms debounce
         });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
@@ -111,7 +117,17 @@
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (mobileDevice) {
+                // Rotate the canvas by 90 degrees for mobile devices
+                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
+                canvasCtx.rotate(90 * Math.PI / 180);
+                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
+                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
+            } else {
+                // Draw normally for non-mobile devices
+                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
+            }
 
             for (const landmarks of results.multiHandLandmarks) {
                 // Ensure landmarks are valid
@@ -119,8 +135,15 @@
                 const lmlist = [];
                 for (let id = 0; id < 21; id++) {
                     const lm = landmarks[id];
-                    const x = lm.x * canvasElement.width;
-                    const y = lm.y * canvasElement.height;
+                    let x = lm.x * canvasElement.width;
+                    let y = lm.y * canvasElement.height;
+
+                    if (mobileDevice) {
+                        // Adjust landmarks for rotated canvas
+                        x = lm.y * canvasElement.width;
+                        y = canvasElement.height - lm.x * canvasElement.height;
+                    }
+
                     lmlist.push([id, Math.round(x), Math.round(y)]);
                 }
 
@@ -157,7 +180,9 @@
                     await hands.send({ image: videoElement });
                 },
                 width: canvasWidth,
-                height: canvasHeight
+                height: canvasHeight,
+                facingMode: 'user', // Use front camera if available
+                // Optionally, you can set other camera constraints here
             });
             camera.start();
         }
