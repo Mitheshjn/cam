@@ -8,9 +8,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
-        body { display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        .output_canvas { border: 1px solid black; }
-        #fingerCount { font-size: 24px; color: black; margin-top: 10px; }
+        body { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            flex-direction: column; 
+            height: 100vh; 
+            margin: 0;
+        }
+        .output_canvas { 
+            border: 1px solid black; 
+            max-width: 100%;
+            height: auto;
+        }
+        #fingerCount { 
+            font-size: 24px; 
+            color: black; 
+            margin-top: 10px; 
+        }
     </style>
 </head>
 
@@ -19,11 +34,49 @@
         <div style="display: none;">
             <video class="input_video"></video>
         </div>
-        <canvas class="output_canvas" width="1280" height="720"></canvas>
+        <canvas class="output_canvas"></canvas>
         <div id="fingerCount">Fingers Raised: 0</div>
     </div>
 
     <script type="module">
+        // Function to determine device type based on screen width
+        function isMobileDevice() {
+            return window.innerWidth <= 768; // You can adjust the breakpoint as needed
+        }
+
+        // Set canvas and camera dimensions based on device type
+        let canvasWidth, canvasHeight;
+
+        function setCanvasDimensions() {
+            if (isMobileDevice()) {
+                canvasWidth = 720;
+                canvasHeight = 1080;
+            } else {
+                canvasWidth = 1080;
+                canvasHeight = 720;
+            }
+
+            // Update the canvas element
+            const canvasElement = document.getElementsByClassName('output_canvas')[0];
+            canvasElement.width = canvasWidth;
+            canvasElement.height = canvasHeight;
+        }
+
+        // Initial setup
+        setCanvasDimensions();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            setCanvasDimensions();
+            // Restart camera with new dimensions
+            if (camera) {
+                camera.stop();
+                camera.width = canvasWidth;
+                camera.height = canvasHeight;
+                camera.start();
+            }
+        });
+
         const videoElement = document.getElementsByClassName('input_video')[0];
         const canvasElement = document.getElementsByClassName('output_canvas')[0];
         const canvasCtx = canvasElement.getContext('2d');
@@ -69,20 +122,19 @@
                     const x = lm.x * canvasElement.width;
                     const y = lm.y * canvasElement.height;
                     lmlist.push([id, Math.round(x), Math.round(y)]);
-                
-                    // Proceed with finger count calculation if lmlist has 21 landmarks
-                    if (lmlist.length === 21) {
-                        const fingerCount = countFingers(lmlist);
-                        fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
-                        console.log(fingerCount);
-                    }
-                } 
+                }
+
+                if (lmlist.length === 21) {
+                    const fingerCount = countFingers(lmlist);
+                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                    console.log(fingerCount);
+                }
 
                 // Draw the landmarks and connections
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
                 drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
-             
+
             canvasCtx.restore();
         }
 
@@ -97,14 +149,20 @@
         });
         hands.onResults(onResults);
 
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 1280,
-            height: 720
-        });
-        camera.start();
+        let camera;
+
+        function startCamera() {
+            camera = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({ image: videoElement });
+                },
+                width: canvasWidth,
+                height: canvasHeight
+            });
+            camera.start();
+        }
+
+        startCamera();
     </script>
 </body>
 </html>
