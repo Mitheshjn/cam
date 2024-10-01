@@ -8,16 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
-        body { 
-            display: flex;
+        body {
             justify-content: center; 
             align-items: center; 
-            height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
-        }
-        .container {
-            text-align: center;
         }
         .output_canvas { 
             border: 1px solid black; 
@@ -54,13 +48,14 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = window.innerWidth; // Set canvas width to device width
-                canvasHeight = canvasWidth * 16 / 9; // Maintain 16:9 aspect ratio for portrait mode
+                canvasWidth = 480;
+                canvasHeight = 720;
             } else {
                 canvasWidth = 1080;
-                canvasHeight = 720;  // Landscape on desktop
+                canvasHeight = 720;
             }
 
+            // Update the canvas element
             const canvasElement = document.getElementsByClassName('output_canvas')[0];
             canvasElement.width = canvasWidth;
             canvasElement.height = canvasHeight;
@@ -75,13 +70,14 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 setCanvasDimensions();
+                // Restart camera with new dimensions
                 if (camera) {
                     camera.stop();
                     camera.width = canvasWidth;
                     camera.height = canvasHeight;
                     camera.start();
                 }
-            }, 500); // 500ms debounce
+            }, 300); // 300ms debounce
         });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
@@ -89,31 +85,6 @@
         const canvasCtx = canvasElement.getContext('2d');
         const fingerCountDisplay = document.getElementById('fingerCount');
 
-        // Crop video to fit fully within the canvas without stretching
-        function cropAndFitVideo(video, canvasWidth, canvasHeight) {
-            const videoAspectRatio = video.videoWidth / video.videoHeight;
-            const canvasAspectRatio = canvasWidth / canvasHeight;
-
-            let drawWidth, drawHeight, offsetX, offsetY;
-
-            if (canvasAspectRatio > videoAspectRatio) {
-                // Video is taller than canvas, fit by height and crop width
-                drawHeight = canvasHeight;
-                drawWidth = video.videoWidth * (canvasHeight / video.videoHeight);
-                offsetX = (canvasWidth - drawWidth) / 2; // Center horizontally
-                offsetY = 0;
-            } else {
-                // Video is wider than canvas, fit by width and crop height
-                drawWidth = canvasWidth;
-                drawHeight = video.videoHeight * (canvasWidth / video.videoWidth);
-                offsetX = 0;
-                offsetY = (canvasHeight - drawHeight) / 2; // Center vertically
-            }
-
-            return { drawWidth, drawHeight, offsetX, offsetY };
-        }
-
-        // Function to count fingers from landmarks
         function countFingers(lmlist) {
             let fingerCount = 0;
             const tipIds = [4, 8, 12, 16, 20]; // Thumb, Index, Middle, Ring, Pinky
@@ -144,32 +115,44 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Crop and fit video to match canvas size without stretching
-            const { drawWidth, drawHeight, offsetX, offsetY } = cropAndFitVideo(videoElement, canvasWidth, canvasHeight);
+            if (mobileDevice) {
+                // Rotate the canvas by 90 degrees for mobile devices
+                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
+                canvasCtx.rotate(90 * Math.PI / 180);
+                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
+                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
+            } else {
+                // Draw normally for non-mobile devices
+                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
+            }
 
-            // Draw the cropped video
-            canvasCtx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight);
+            for (const landmarks of results.multiHandLandmarks) {
+                // Ensure landmarks are valid
 
-            if (results.multiHandLandmarks) {
-                for (const landmarks of results.multiHandLandmarks) {
-                    // Extract the landmark coordinates in relation to the cropped video
-                    const lmlist = landmarks.map(lm => {
-                        return [
-                            lm.x * drawWidth + offsetX,
-                            lm.y * drawHeight + offsetY,
-                            lm.z
-                        ];
-                    });
+                const lmlist = [];
+                for (let id = 0; id < 21; id++) {
+                    const lm = landmarks[id];
+                    let x = lm.x * canvasElement.width;
+                    let y = lm.y * canvasElement.height;
 
-                    // Draw landmarks and connections
-                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
-
-                    if (lmlist.length === 21) {
-                        const fingerCount = countFingers(lmlist);
-                        fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                    if (mobileDevice) {
+                        // Adjust landmarks for rotated canvas
+                        x = lm.y * canvasElement.width;
+                        y = canvasElement.height - lm.x * canvasElement.height;
                     }
+
+                    lmlist.push([id, Math.round(x), Math.round(y)]);
                 }
+
+                if (lmlist.length === 21) {
+                    const fingerCount = countFingers(lmlist);
+                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                    console.log(fingerCount);
+                }
+
+                // Draw the landmarks and connections
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
 
             canvasCtx.restore();
@@ -181,32 +164,22 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.4
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.3
         });
         hands.onResults(onResults);
 
         let camera;
 
-        // Start the camera and crop the video before sending it for hand detection
         function startCamera() {
             camera = new Camera(videoElement, {
                 onFrame: async () => {
-                    const { drawWidth, drawHeight, offsetX, offsetY } = cropAndFitVideo(videoElement, canvasWidth, canvasHeight);
-
-                    // Use an offscreen canvas to crop the video before sending it for hand landmark detection
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = drawWidth;
-                    tempCanvas.height = drawHeight;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    tempCtx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
-
-                    // Send the cropped video frame for hand landmark detection
-                    await hands.send({ image: tempCanvas });
+                    await hands.send({ image: videoElement });
                 },
                 width: canvasWidth,
                 height: canvasHeight,
-                facingMode: 'user',
+                facingMode: 'user', // Use front camera if available
+                // Optionally, you can set other camera constraints here
             });
             camera.start();
         }
