@@ -113,6 +113,7 @@
             return { drawWidth, drawHeight, offsetX, offsetY };
         }
 
+        // Function to count fingers from landmarks
         function countFingers(lmlist) {
             let fingerCount = 0;
             const tipIds = [4, 8, 12, 16, 20]; // Thumb, Index, Middle, Ring, Pinky
@@ -145,35 +146,25 @@
 
             // Crop and fit video to match canvas size without stretching
             const { drawWidth, drawHeight, offsetX, offsetY } = cropAndFitVideo(videoElement, canvasWidth, canvasHeight);
-            canvasCtx.drawImage(results.image, offsetX, offsetY, drawWidth, drawHeight);
+
+            // Draw the cropped video
+            canvasCtx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight);
 
             if (results.multiHandLandmarks) {
                 for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
+
                     const lmlist = [];
-
-                    // Get scaling factors for landmarks based on drawn video dimensions
-                    const xScale = drawWidth / videoElement.videoWidth;
-                    const yScale = drawHeight / videoElement.videoHeight;
-
                     for (let id = 0; id < 21; id++) {
                         const lm = landmarks[id];
-
-                        // Adjust landmark positions based on scaling and cropping
-                        let x = lm.x * videoElement.videoWidth * xScale + offsetX;
-                        let y = lm.y * videoElement.videoHeight * yScale + offsetY;
-
-                        lmlist.push([id, Math.round(x), Math.round(y)]);
+                        lmlist.push([id, lm.x, lm.y]);
                     }
 
                     if (lmlist.length === 21) {
                         const fingerCount = countFingers(lmlist);
                         fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
-                        console.log(fingerCount);
                     }
-
-                    // Draw the landmarks and connections
-                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
                 }
             }
 
@@ -193,24 +184,25 @@
 
         let camera;
 
+        // Start the camera and crop the video before sending it for hand detection
         function startCamera() {
-            const constraints = {
-                video: {
-                    width: { ideal: canvasWidth },
-                    height: { ideal: canvasHeight },
-                    facingMode: 'user',
-                    aspectRatio: canvasWidth / canvasHeight,
-                }
-            };
-
             camera = new Camera(videoElement, {
                 onFrame: async () => {
-                    await hands.send({ image: videoElement });
+                    const { drawWidth, drawHeight, offsetX, offsetY } = cropAndFitVideo(videoElement, canvasWidth, canvasHeight);
+
+                    // Use an offscreen canvas to crop the video before sending it for hand landmark detection
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = drawWidth;
+                    tempCanvas.height = drawHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(videoElement, 0, 0, drawWidth, drawHeight);
+
+                    // Send the cropped video frame for hand landmark detection
+                    await hands.send({ image: tempCanvas });
                 },
                 width: canvasWidth,
                 height: canvasHeight,
                 facingMode: 'user',
-                constraints: constraints.video
             });
             camera.start();
         }
