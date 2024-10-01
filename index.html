@@ -54,8 +54,8 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 720;
-                canvasHeight = 1280; // Portrait on mobile
+                canvasWidth = window.innerWidth; // Set canvas width to device width
+                canvasHeight = canvasWidth * 16 / 9; // Maintain 16:9 aspect ratio for portrait mode
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;  // Landscape on desktop
@@ -152,8 +152,11 @@
                     const lmlist = [];
                     for (let id = 0; id < 21; id++) {
                         const lm = landmarks[id];
+
+                        // Adjust landmark positions according to the cropping and scaling of the video
                         let x = lm.x * drawWidth + offsetX;
                         let y = lm.y * drawHeight + offsetY;
+
                         lmlist.push([id, Math.round(x), Math.round(y)]);
                     }
 
@@ -187,19 +190,12 @@
 
         function startCamera() {
             const constraints = {
-                video: mobileDevice
-                    ? {
-                        width: { ideal: canvasWidth },
-                        height: { ideal: canvasHeight },
-                        facingMode: 'user',
-                        aspectRatio: canvasWidth / canvasHeight,
-                    }
-                    : {
-                        width: { ideal: canvasWidth },
-                        height: { ideal: canvasHeight },
-                        facingMode: 'user',
-                        aspectRatio: canvasWidth / canvasHeight,
-                    }
+                video: {
+                    width: { ideal: canvasWidth },
+                    height: { ideal: canvasHeight },
+                    facingMode: 'user',
+                    aspectRatio: canvasWidth / canvasHeight,
+                }
             };
 
             camera = new Camera(videoElement, {
