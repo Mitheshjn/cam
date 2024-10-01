@@ -150,12 +150,17 @@
             if (results.multiHandLandmarks) {
                 for (const landmarks of results.multiHandLandmarks) {
                     const lmlist = [];
+
+                    // Get scaling factors for landmarks based on drawn video dimensions
+                    const xScale = drawWidth / videoElement.videoWidth;
+                    const yScale = drawHeight / videoElement.videoHeight;
+
                     for (let id = 0; id < 21; id++) {
                         const lm = landmarks[id];
 
-                        // Adjust landmark positions according to the cropping and scaling of the video
-                        let x = lm.x * drawWidth + offsetX;
-                        let y = lm.y * drawHeight + offsetY;
+                        // Adjust landmark positions based on scaling and cropping
+                        let x = lm.x * videoElement.videoWidth * xScale + offsetX;
+                        let y = lm.y * videoElement.videoHeight * yScale + offsetY;
 
                         lmlist.push([id, Math.round(x), Math.round(y)]);
                     }
