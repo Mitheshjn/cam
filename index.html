@@ -152,14 +152,18 @@
 
             if (results.multiHandLandmarks) {
                 for (const landmarks of results.multiHandLandmarks) {
+                    // Extract the landmark coordinates in relation to the cropped video
+                    const lmlist = landmarks.map(lm => {
+                        return [
+                            lm.x * drawWidth + offsetX,
+                            lm.y * drawHeight + offsetY,
+                            lm.z
+                        ];
+                    });
+
+                    // Draw landmarks and connections
                     drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
                     drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
-
-                    const lmlist = [];
-                    for (let id = 0; id < 21; id++) {
-                        const lm = landmarks[id];
-                        lmlist.push([id, lm.x, lm.y]);
-                    }
 
                     if (lmlist.length === 21) {
                         const fingerCount = countFingers(lmlist);
@@ -195,7 +199,7 @@
                     tempCanvas.width = drawWidth;
                     tempCanvas.height = drawHeight;
                     const tempCtx = tempCanvas.getContext('2d');
-                    tempCtx.drawImage(videoElement, 0, 0, drawWidth, drawHeight);
+                    tempCtx.drawImage(videoElement, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
 
                     // Send the cropped video frame for hand landmark detection
                     await hands.send({ image: tempCanvas });
