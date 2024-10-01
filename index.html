@@ -8,10 +8,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
-        body {
+        body { 
+            display: flex;
             justify-content: center; 
             align-items: center; 
+            height: 100vh;
             margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
         }
         .output_canvas { 
             border: 1px solid black; 
@@ -48,7 +54,7 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 480;
+                canvasWidth = 320;
                 canvasHeight = 720;
             } else {
                 canvasWidth = 1080;
@@ -77,13 +83,22 @@
                     camera.height = canvasHeight;
                     camera.start();
                 }
-            }, 300); // 300ms debounce
+            }, 500); // 500ms debounce
         });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
         const canvasElement = document.getElementsByClassName('output_canvas')[0];
         const canvasCtx = canvasElement.getContext('2d');
         const fingerCountDisplay = document.getElementById('fingerCount');
+
+        // Create an offscreen canvas for rotating video frames on mobile devices
+        let tempCanvas, tempCtx;
+        if (mobileDevice) {
+            tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvasWidth;
+            tempCanvas.height = canvasHeight;
+            tempCtx = tempCanvas.getContext('2d');
+        }
 
         function countFingers(lmlist) {
             let fingerCount = 0;
@@ -126,33 +141,35 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
             }
 
-            for (const landmarks of results.multiHandLandmarks) {
-                // Ensure landmarks are valid
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Ensure landmarks are valid
 
-                const lmlist = [];
-                for (let id = 0; id < 21; id++) {
-                    const lm = landmarks[id];
-                    let x = lm.x * canvasElement.width;
-                    let y = lm.y * canvasElement.height;
+                    const lmlist = [];
+                    for (let id = 0; id < 21; id++) {
+                        const lm = landmarks[id];
+                        let x = lm.x * canvasElement.width;
+                        let y = lm.y * canvasElement.height;
 
-                    if (mobileDevice) {
-                        // Adjust landmarks for rotated canvas
-                        x = lm.y * canvasElement.width;
-                        y = canvasElement.height - lm.x * canvasElement.height;
+                        if (mobileDevice) {
+                            // Adjust landmarks for rotated canvas
+                            x = lm.y * canvasElement.width;
+                            y = canvasElement.height - lm.x * canvasElement.height;
+                        }
+
+                        lmlist.push([id, Math.round(x), Math.round(y)]);
                     }
 
-                    lmlist.push([id, Math.round(x), Math.round(y)]);
-                }
+                    if (lmlist.length === 21) {
+                        const fingerCount = countFingers(lmlist);
+                        fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                        console.log(fingerCount);
+                    }
 
-                if (lmlist.length === 21) {
-                    const fingerCount = countFingers(lmlist);
-                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
-                    console.log(fingerCount);
+                    // Draw the landmarks and connections
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
                 }
-
-                // Draw the landmarks and connections
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
 
             canvasCtx.restore();
@@ -164,8 +181,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.3
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.4
         });
         hands.onResults(onResults);
 
@@ -174,7 +191,18 @@
         function startCamera() {
             camera = new Camera(videoElement, {
                 onFrame: async () => {
-                    await hands.send({ image: videoElement });
+                    if (mobileDevice && tempCanvas && tempCtx) {
+                        // Rotate the frame by 90 degrees using the offscreen canvas
+                        tempCtx.save();
+                        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+                        tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+                        tempCtx.rotate(90 * Math.PI / 180);
+                        tempCtx.drawImage(videoElement, -videoElement.videoWidth / 2, -videoElement.videoHeight / 2, videoElement.videoWidth, videoElement.videoHeight);
+                        tempCtx.restore();
+                        await hands.send({ image: tempCanvas });
+                    } else {
+                        await hands.send({ image: videoElement });
+                    }
                 },
                 width: canvasWidth,
                 height: canvasHeight,
