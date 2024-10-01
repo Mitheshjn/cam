@@ -64,20 +64,6 @@
         // Initial setup
         setCanvasDimensions();
 
-        // Handle window resize with debounce
-        let resizeTimeout;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                setCanvasDimensions();
-                // Restart camera with new dimensions
-                if (camera) {
-                    camera.stop();
-                    camera.width = canvasWidth;
-                    camera.height = canvasHeight;
-                    camera.start();
-                }
-            }, 300); // 300ms debounce
         });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
