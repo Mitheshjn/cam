@@ -54,14 +54,13 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 320;
-                canvasHeight = 720;
+                canvasWidth = 720;
+                canvasHeight = 1280; // Portrait on mobile
             } else {
                 canvasWidth = 1080;
-                canvasHeight = 720;
+                canvasHeight = 720;  // Landscape on desktop
             }
 
-            // Update the canvas element
             const canvasElement = document.getElementsByClassName('output_canvas')[0];
             canvasElement.width = canvasWidth;
             canvasElement.height = canvasHeight;
@@ -76,7 +75,6 @@
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 setCanvasDimensions();
-                // Restart camera with new dimensions
                 if (camera) {
                     camera.stop();
                     camera.width = canvasWidth;
@@ -91,13 +89,28 @@
         const canvasCtx = canvasElement.getContext('2d');
         const fingerCountDisplay = document.getElementById('fingerCount');
 
-        // Create an offscreen canvas for rotating video frames on mobile devices
-        let tempCanvas, tempCtx;
-        if (mobileDevice) {
-            tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvasWidth;
-            tempCanvas.height = canvasHeight;
-            tempCtx = tempCanvas.getContext('2d');
+        // Crop video to fit fully within the canvas without stretching
+        function cropAndFitVideo(video, canvasWidth, canvasHeight) {
+            const videoAspectRatio = video.videoWidth / video.videoHeight;
+            const canvasAspectRatio = canvasWidth / canvasHeight;
+
+            let drawWidth, drawHeight, offsetX, offsetY;
+
+            if (canvasAspectRatio > videoAspectRatio) {
+                // Video is taller than canvas, fit by height and crop width
+                drawHeight = canvasHeight;
+                drawWidth = video.videoWidth * (canvasHeight / video.videoHeight);
+                offsetX = (canvasWidth - drawWidth) / 2; // Center horizontally
+                offsetY = 0;
+            } else {
+                // Video is wider than canvas, fit by width and crop height
+                drawWidth = canvasWidth;
+                drawHeight = video.videoHeight * (canvasWidth / video.videoWidth);
+                offsetX = 0;
+                offsetY = (canvasHeight - drawHeight) / 2; // Center vertically
+            }
+
+            return { drawWidth, drawHeight, offsetX, offsetY };
         }
 
         function countFingers(lmlist) {
@@ -130,33 +143,17 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            if (mobileDevice) {
-                // Rotate the canvas by 90 degrees for mobile devices
-                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
-                canvasCtx.rotate(90 * Math.PI / 180);
-                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
-                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
-            } else {
-                // Draw normally for non-mobile devices
-                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
-            }
+            // Crop and fit video to match canvas size without stretching
+            const { drawWidth, drawHeight, offsetX, offsetY } = cropAndFitVideo(videoElement, canvasWidth, canvasHeight);
+            canvasCtx.drawImage(results.image, offsetX, offsetY, drawWidth, drawHeight);
 
             if (results.multiHandLandmarks) {
                 for (const landmarks of results.multiHandLandmarks) {
-                    // Ensure landmarks are valid
-
                     const lmlist = [];
                     for (let id = 0; id < 21; id++) {
                         const lm = landmarks[id];
-                        let x = lm.x * canvasElement.width;
-                        let y = lm.y * canvasElement.height;
-
-                        if (mobileDevice) {
-                            // Adjust landmarks for rotated canvas
-                            x = lm.y * canvasElement.width;
-                            y = canvasElement.height - lm.x * canvasElement.height;
-                        }
-
+                        let x = lm.x * drawWidth + offsetX;
+                        let y = lm.y * drawHeight + offsetY;
                         lmlist.push([id, Math.round(x), Math.round(y)]);
                     }
 
@@ -189,25 +186,30 @@
         let camera;
 
         function startCamera() {
+            const constraints = {
+                video: mobileDevice
+                    ? {
+                        width: { ideal: canvasWidth },
+                        height: { ideal: canvasHeight },
+                        facingMode: 'user',
+                        aspectRatio: canvasWidth / canvasHeight,
+                    }
+                    : {
+                        width: { ideal: canvasWidth },
+                        height: { ideal: canvasHeight },
+                        facingMode: 'user',
+                        aspectRatio: canvasWidth / canvasHeight,
+                    }
+            };
+
             camera = new Camera(videoElement, {
                 onFrame: async () => {
-                    if (mobileDevice && tempCanvas && tempCtx) {
-                        // Rotate the frame by 90 degrees using the offscreen canvas
-                        tempCtx.save();
-                        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-                        tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-                        tempCtx.rotate(90 * Math.PI / 180);
-                        tempCtx.drawImage(videoElement, -videoElement.videoWidth / 2, -videoElement.videoHeight / 2, videoElement.videoWidth, videoElement.videoHeight);
-                        tempCtx.restore();
-                        await hands.send({ image: tempCanvas });
-                    } else {
-                        await hands.send({ image: videoElement });
-                    }
+                    await hands.send({ image: videoElement });
                 },
                 width: canvasWidth,
                 height: canvasHeight,
-                facingMode: 'user', // Use front camera if available
-                // Optionally, you can set other camera constraints here
+                facingMode: 'user',
+                constraints: constraints.video
             });
             camera.start();
         }
