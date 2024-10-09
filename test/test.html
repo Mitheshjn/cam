@@ -9,24 +9,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
-            display: flex; /* Added display:flex to center the content */
             justify-content: center; 
             align-items: center; 
-            height: 100vh; /* Full viewport height */
             margin: 0;
-            background-color: #f0f0f0; /* Optional: background color for better visibility */
         }
         .output_canvas { 
             border: 1px solid black; 
             max-width: 100%;
             height: auto;
-            transform: rotate(0deg); /* Default rotation */
         }
         #fingerCount { 
             font-size: 24px; 
             color: black; 
             margin-top: 10px; 
-            text-align: center;
         }
     </style>
 </head>
@@ -54,7 +49,7 @@
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
                 canvasWidth = 720; // Portrait width
-                canvasHeight = 1080; // Portrait height (swapped for rotation)
+                canvasHeight = 720; // Portrait height
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -64,22 +59,9 @@
             const canvasElement = document.getElementsByClassName('output_canvas')[0];
             canvasElement.width = canvasWidth;
             canvasElement.height = canvasHeight;
-
-            // Apply CSS rotation for portrait mode
-            if (mobileDevice) {
-                canvasElement.style.transform = 'rotate(90deg)';
-                canvasElement.style.transformOrigin = 'center center';
-            } else {
-                canvasElement.style.transform = 'rotate(0deg)';
-            }
         }
         // Initial setup
         setCanvasDimensions();
-
-        // Update canvas dimensions on window resize
-        window.addEventListener('resize', () => {
-            setCanvasDimensions();
-        });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
         const canvasElement = document.getElementsByClassName('output_canvas')[0];
@@ -111,29 +93,22 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Apply rotation if in portrait mode
-            if (mobileDevice) {
-                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
-                canvasCtx.rotate(Math.PI / 2); // 90 degrees
-                canvasCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
-            }
-
             // Draw the video frame
             canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
 
             for (const landmarks of results.multiHandLandmarks) {
                 const lmlist = [];
                 for (let id = 0; id < 21; id++) {
-                    let x = landmarks[id].x * canvasElement.width;
-                    let y = landmarks[id].y * canvasElement.height;
+                    const lm = landmarks[id];
+                    let x = lm.x * canvasElement.width;
+                    let y = lm.y * canvasElement.height;
 
                     // Adjust landmarks for portrait orientation
                     if (mobileDevice) {
                         // Rotate the coordinates for portrait
-                        const rotatedX = y;
-                        const rotatedY = canvasWidth - x; // Adjust y after rotation
-                        x = rotatedX;
-                        y = rotatedY;
+                        const tempX = x;
+                        x = y; // Rotate x and y
+                        y = tempX; // Flip y for portrait mode
                     }
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
@@ -141,7 +116,7 @@
 
                 if (lmlist.length === 21) {
                     const fingerCount = countFingers(lmlist);
-                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                    fingerCountDisplay.innerText = Fingers Raised: ${fingerCount};
                     console.log(fingerCount);
                 }
 
@@ -154,13 +129,13 @@
         }
 
         const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}
         });
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.3
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
         });
         hands.onResults(onResults);
 
@@ -171,8 +146,8 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: mobileDevice ? canvasHeight : canvasWidth,
-                height: mobileDevice ? canvasWidth : canvasHeight,
+                width: canvasWidth, // Width and height are flipped for portrait
+                height: canvasHeight,
                 facingMode: 'user', // Use front camera if available
             });
             camera.start();
