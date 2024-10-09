@@ -48,8 +48,8 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 720; // Portrait width
-                canvasHeight = 720; // Portrait height
+                canvasWidth = 720;
+                canvasHeight = 480;
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -72,15 +72,20 @@
             let fingerCount = 0;
             const tipIds = [4, 8, 12, 16, 20]; // Thumb, Index, Middle, Ring, Pinky
 
-            // Check the thumb
-            const isThumbRaised = lmlist[tipIds[0]][1] < lmlist[tipIds[0] - 1][1]; // Thumb up if tip is above the base
+            // Check thumb separately for left/right hand orientation
+            let isRightHand = lmlist[12][1] > lmlist[20][1]; // Determine if it's a right hand
+
+            // Check thumb based on hand orientation
+            const isThumbRaised = isRightHand
+                ? lmlist[tipIds[0]][1] > lmlist[tipIds[0] - 1][1]
+                : lmlist[tipIds[0]][1] < lmlist[tipIds[0] - 1][1];
             if (isThumbRaised) {
                 fingerCount += 1;
             }
 
-            // Check the other fingers
+            // Check other fingers
             for (let i = 1; i < tipIds.length; i++) {
-                const isFingerRaised = lmlist[tipIds[i]][2] < lmlist[tipIds[i] - 2][2]; // Tip above second joint
+                const isFingerRaised = lmlist[tipIds[i]][2] < lmlist[tipIds[i] - 2][2];
                 if (isFingerRaised) {
                     fingerCount += 1;
                 }
@@ -93,22 +98,30 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Draw the video frame
-            canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
+            if (mobileDevice) {
+                // Rotate the canvas by 90 degrees for mobile devices
+                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
+                canvasCtx.rotate(90 * Math.PI / 180);
+                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
+                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
+            } else {
+                // Draw normally for non-mobile devices
+                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
+            }
 
             for (const landmarks of results.multiHandLandmarks) {
+                // Ensure landmarks are valid
+
                 const lmlist = [];
                 for (let id = 0; id < 21; id++) {
                     const lm = landmarks[id];
-                    let x = lm.y * canvasElement.width;
-                    let y = lm.x * canvasElement.height;
+                    let x = lm.x * canvasElement.width;
+                    let y = lm.y * canvasElement.height;
 
-                    // Adjust landmarks for portrait orientation
                     if (mobileDevice) {
-                        // Rotate the coordinates for portrait
-                        const tempX = x;
-                        x = y; // Rotate x and y
-                        y = tempX; // Flip y for portrait mode
+                        // Adjust landmarks for rotated canvas
+                        x = lm.y * canvasElement.width;
+                        y = canvasElement.height - lm.x * canvasElement.height;
                     }
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
@@ -116,11 +129,11 @@
 
                 if (lmlist.length === 21) {
                     const fingerCount = countFingers(lmlist);
-                    fingerCountDisplay.innerText = 'Fingers Raised: ${fingerCount}';
+                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
                     console.log(fingerCount);
                 }
 
-                // Draw landmarks and connections
+                // Draw the landmarks and connections
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
                 drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
@@ -129,13 +142,13 @@
         }
 
         const hands = new Hands({
-            locateFile: (file) => 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}'
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.3
         });
         hands.onResults(onResults);
 
@@ -146,9 +159,10 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: canvasHeight, // Width and height are flipped for portrait
+                width: canvasHeight,
                 height: canvasWidth,
                 facingMode: 'user', // Use front camera if available
+                // Optionally, you can set other camera constraints here
             });
             camera.start();
         }
