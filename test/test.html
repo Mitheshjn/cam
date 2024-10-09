@@ -121,7 +121,7 @@
                     if (mobileDevice) {
                         // Adjust landmarks for rotated canvas
                         x = lm.y * canvasElement.width;
-                        y = canvasElement.height - lm.x * canvasElement.height;
+                        y = lm.x * canvasElement.width;
                     }
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
