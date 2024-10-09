@@ -48,8 +48,8 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 480;
-                canvasHeight = 720;
+                canvasWidth = 720; // Portrait width
+                canvasHeight = 480; // Portrait height
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -98,16 +98,8 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            if (mobileDevice) {
-                // Rotate the canvas by 90 degrees for mobile devices
-                canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
-                canvasCtx.rotate(90 * Math.PI / 180);
-                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
-                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
-            } else {
-                // Draw normally for non-mobile devices
-                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
-            }
+            // Draw normally since we're in portrait mode
+            canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
 
             for (const landmarks of results.multiHandLandmarks) {
                 // Ensure landmarks are valid
@@ -118,11 +110,9 @@
                     let x = lm.x * canvasElement.width;
                     let y = lm.y * canvasElement.height;
 
-                    if (mobileDevice) {
-                        // Adjust landmarks for rotated canvas
-                        x = lm.y * canvasElement.width;
-                        y = canvasElement.height - lm.x * canvasElement.height;
-                    }
+                    // Adjust landmarks for portrait orientation
+                    y = lm.x * canvasElement.height; // Flipping x and y for portrait
+                    x = canvasElement.width - lm.y * canvasElement.width;
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
                 }
@@ -159,8 +149,8 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: canvasWidth,
-                height: canvasHeight,
+                width: canvasHeight, // Width and height are flipped for portrait
+                height: canvasWidth,
                 facingMode: 'user', // Use front camera if available
                 // Optionally, you can set other camera constraints here
             });
