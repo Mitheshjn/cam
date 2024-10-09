@@ -134,8 +134,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.3
         });
         hands.onResults(onResults);
 
@@ -146,8 +146,8 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: canvasHeight, // Width and height are flipped for portrait
-                height: canvasWidth,
+                width: canvasWidth, // Width and height are flipped for portrait
+                height: canvasHeight,
                 facingMode: 'user', // Use front camera if available
             });
             camera.start();
