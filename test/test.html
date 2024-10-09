@@ -9,19 +9,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         body {
+            display: flex; /* Added display:flex to center the content */
             justify-content: center; 
             align-items: center; 
+            height: 100vh; /* Full viewport height */
             margin: 0;
+            background-color: #f0f0f0; /* Optional: background color for better visibility */
         }
         .output_canvas { 
             border: 1px solid black; 
             max-width: 100%;
             height: auto;
+            transform: rotate(0deg); /* Default rotation */
         }
         #fingerCount { 
             font-size: 24px; 
             color: black; 
             margin-top: 10px; 
+            text-align: center;
         }
     </style>
 </head>
@@ -48,8 +53,8 @@
         function setCanvasDimensions() {
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
-                canvasWidth = 720;
-                canvasHeight = 480;
+                canvasWidth = 720; // Portrait width
+                canvasHeight = 1080; // Portrait height (swapped for rotation)
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -59,9 +64,22 @@
             const canvasElement = document.getElementsByClassName('output_canvas')[0];
             canvasElement.width = canvasWidth;
             canvasElement.height = canvasHeight;
+
+            // Apply CSS rotation for portrait mode
+            if (mobileDevice) {
+                canvasElement.style.transform = 'rotate(90deg)';
+                canvasElement.style.transformOrigin = 'center center';
+            } else {
+                canvasElement.style.transform = 'rotate(0deg)';
+            }
         }
         // Initial setup
         setCanvasDimensions();
+
+        // Update canvas dimensions on window resize
+        window.addEventListener('resize', () => {
+            setCanvasDimensions();
+        });
 
         const videoElement = document.getElementsByClassName('input_video')[0];
         const canvasElement = document.getElementsByClassName('output_canvas')[0];
@@ -72,20 +90,15 @@
             let fingerCount = 0;
             const tipIds = [4, 8, 12, 16, 20]; // Thumb, Index, Middle, Ring, Pinky
 
-            // Check thumb separately for left/right hand orientation
-            let isRightHand = lmlist[12][1] > lmlist[20][1]; // Determine if it's a right hand
-
-            // Check thumb based on hand orientation
-            const isThumbRaised = isRightHand
-                ? lmlist[tipIds[0]][1] > lmlist[tipIds[0] - 1][1]
-                : lmlist[tipIds[0]][1] < lmlist[tipIds[0] - 1][1];
+            // Check the thumb
+            const isThumbRaised = lmlist[tipIds[0]][1] < lmlist[tipIds[0] - 1][1]; // Thumb up if tip is above the base
             if (isThumbRaised) {
                 fingerCount += 1;
             }
 
-            // Check other fingers
+            // Check the other fingers
             for (let i = 1; i < tipIds.length; i++) {
-                const isFingerRaised = lmlist[tipIds[i]][2] < lmlist[tipIds[i] - 2][2];
+                const isFingerRaised = lmlist[tipIds[i]][2] < lmlist[tipIds[i] - 2][2]; // Tip above second joint
                 if (isFingerRaised) {
                     fingerCount += 1;
                 }
@@ -98,30 +111,29 @@
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
+            // Apply rotation if in portrait mode
             if (mobileDevice) {
-                // Rotate the canvas by 90 degrees for mobile devices
                 canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
-                canvasCtx.rotate(90 * Math.PI / 180);
-                canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
-                canvasCtx.drawImage(results.image, 0, 0, canvasHeight, canvasWidth);
-            } else {
-                // Draw normally for non-mobile devices
-                canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
+                canvasCtx.rotate(Math.PI / 2); // 90 degrees
+                canvasCtx.translate(-canvasWidth / 2, -canvasHeight / 2);
             }
 
-            for (const landmarks of results.multiHandLandmarks) {
-                // Ensure landmarks are valid
+            // Draw the video frame
+            canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
 
+            for (const landmarks of results.multiHandLandmarks) {
                 const lmlist = [];
                 for (let id = 0; id < 21; id++) {
-                    const lm = landmarks[id];
-                    let x = lm.x * canvasElement.width;
-                    let y = lm.y * canvasElement.height;
+                    let x = landmarks[id].x * canvasElement.width;
+                    let y = landmarks[id].y * canvasElement.height;
 
+                    // Adjust landmarks for portrait orientation
                     if (mobileDevice) {
-                        // Adjust landmarks for rotated canvas
-                        x = lm.y * canvasElement.width;
-                        y = lm.x * canvasElement.width;
+                        // Rotate the coordinates for portrait
+                        const rotatedX = y;
+                        const rotatedY = canvasWidth - x; // Adjust y after rotation
+                        x = rotatedX;
+                        y = rotatedY;
                     }
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
@@ -133,7 +145,7 @@
                     console.log(fingerCount);
                 }
 
-                // Draw the landmarks and connections
+                // Draw landmarks and connections
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
                 drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
@@ -159,10 +171,9 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: canvasWidth,
-                height: canvasHeight,
+                width: mobileDevice ? canvasHeight : canvasWidth,
+                height: mobileDevice ? canvasWidth : canvasHeight,
                 facingMode: 'user', // Use front camera if available
-                // Optionally, you can set other camera constraints here
             });
             camera.start();
         }
