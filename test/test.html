@@ -100,8 +100,8 @@
                 const lmlist = [];
                 for (let id = 0; id < 21; id++) {
                     const lm = landmarks[id];
-                    let x = lm.x * canvasElement.width;
-                    let y = lm.y * canvasElement.height;
+                    let x = lm.y * canvasElement.width;
+                    let y = lm.x * canvasElement.height;
 
                     // Adjust landmarks for portrait orientation
                     if (mobileDevice) {
@@ -146,8 +146,8 @@
                 onFrame: async () => {
                     await hands.send({ image: videoElement });
                 },
-                width: canvasWidth, // Width and height are flipped for portrait
-                height: canvasHeight,
+                width: canvasHeight, // Width and height are flipped for portrait
+                height: canvasWidth,
                 facingMode: 'user', // Use front camera if available
             });
             camera.start();
