@@ -49,7 +49,7 @@
             mobileDevice = isMobileDevice();
             if (mobileDevice) {
                 canvasWidth = 720; // Portrait width
-                canvasHeight = 480; // Portrait height
+                canvasHeight = 720; // Portrait height
             } else {
                 canvasWidth = 1080;
                 canvasHeight = 720;
@@ -108,7 +108,7 @@
                         // Rotate the coordinates for portrait
                         const tempX = x;
                         x = y; // Rotate x and y
-                        y = canvasElement.height - tempX; // Flip y for portrait mode
+                        y = tempX; // Flip y for portrait mode
                     }
 
                     lmlist.push([id, Math.round(x), Math.round(y)]);
