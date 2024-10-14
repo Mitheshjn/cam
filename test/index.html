@@ -3,14 +3,17 @@
 <head>
     <meta charset="utf-8">
     <title>Hand Gesture Recognition</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- Load Mediapipe scripts locally -->
+    <script src="camera_utils.js"></script>
+    <script src="control_utils.js"></script>
+    <script src="drawing_utils.js"></script>
+    <script src="hands.js"></script>
     <style>
         body {
+            display: flex; /* Added to center content */
             justify-content: center; 
             align-items: center; 
+            height: 100vh; /* Full viewport height */
             margin: 0;
         }
         .output_canvas { 
@@ -109,46 +112,48 @@
                 canvasCtx.drawImage(results.image, 0, 0, canvasWidth, canvasHeight);
             }
 
-            for (const landmarks of results.multiHandLandmarks) {
-                // Ensure landmarks are valid
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Ensure landmarks are valid
 
-                const lmlist = [];
-                for (let id = 0; id < 21; id++) {
-                    const lm = landmarks[id];
-                    let x = lm.x * canvasElement.width;
-                    let y = lm.y * canvasElement.height;
+                    const lmlist = [];
+                    for (let id = 0; id < 21; id++) {
+                        const lm = landmarks[id];
+                        let x = lm.x * canvasElement.width;
+                        let y = lm.y * canvasElement.height;
 
-                    if (mobileDevice) {
-                        // Adjust landmarks for rotated canvas
-                        x = lm.y * canvasElement.width;
-                        y = canvasElement.height - lm.x * canvasElement.height;
+                        if (mobileDevice) {
+                            // Adjust landmarks for rotated canvas
+                            x = lm.y * canvasElement.width;
+                            y = canvasElement.height - lm.x * canvasElement.height;
+                        }
+
+                        lmlist.push([id, Math.round(x), Math.round(y)]);
                     }
 
-                    lmlist.push([id, Math.round(x), Math.round(y)]);
-                }
+                    if (lmlist.length === 21) {
+                        const fingerCount = countFingers(lmlist);
+                        fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                        console.log(fingerCount);
+                    }
 
-                if (lmlist.length === 21) {
-                    const fingerCount = countFingers(lmlist);
-                    fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
-                    console.log(fingerCount);
+                    // Draw the landmarks and connections
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
                 }
-
-                // Draw the landmarks and connections
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
-                drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
             }
 
             canvasCtx.restore();
         }
 
         const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            locateFile: (file) => `${file}` // Update to load from local directory
         });
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.3
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
         });
         hands.onResults(onResults);
 
