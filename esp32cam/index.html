@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Hand Gesture Recognition</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            font-family: sans-serif;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .output_canvas {
+            border: 1px solid black;
+            max-width: 100%;
+            height: auto;
+        }
+        #fingerCount {
+            font-size: 24px;
+            color: black;
+            margin-top: 10px;
+        }
+        #ipInput {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 200px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="controls">
+            <label for="ipInput">ESP32-CAM IP:</label>
+            <input type="text" id="ipInput" placeholder="e.g., 192.168.1.10">
+            <button id="connectButton">Connect</button>
+        </div>
+        <div>
+            <!-- The video/image element to display the stream -->
+            <img id="esp32Stream" style="display: none; max-width: 100%; height: auto;" />
+            <canvas class="output_canvas"></canvas>
+        </div>
+        <div id="fingerCount">Fingers Raised: 0</div>
+    </div>
+
+    <script type="module">
+        // Function to determine device type based on screen width
+        function isMobileDevice() {
+            return window.innerWidth <= 430; // Adjust the breakpoint as needed
+        }
+
+        // Set canvas and camera dimensions based on device type
+        let canvasWidth, canvasHeight;
+        let mobileDevice = isMobileDevice();
+
+        function setCanvasDimensions() {
+            mobileDevice = isMobileDevice();
+            if (mobileDevice) {
+                canvasWidth = 1080;
+                canvasHeight = 720;
+            } else {
+                canvasWidth = 1080;
+                canvasHeight = 720;
+            }
+
+            // Update the canvas element
+            const canvasElement = document.getElementsByClassName('output_canvas')[0];
+            canvasElement.width = canvasWidth;
+            canvasElement.height = canvasHeight;
+        }
+        // Initial setup
+        setCanvasDimensions();
+
+        const esp32StreamImg = document.getElementById('esp32Stream');
+        const canvasElement = document.getElementsByClassName('output_canvas')[0];
+        const canvasCtx = canvasElement.getContext('2d');
+        const fingerCountDisplay = document.getElementById('fingerCount');
+        const ipInput = document.getElementById('ipInput');
+        const connectButton = document.getElementById('connectButton');
+
+        let esp32IpAddress = '';
+        let streamInterval = null;
+
+        function countFingers(lmlist) {
+            let fingerCount = 0;
+            const tipIds = [4, 8, 12, 16, 20]; // Thumb, Index, Middle, Ring, Pinky
+
+            // Check thumb separately for left/right hand orientation
+            let isRightHand = lmlist[12][1] > lmlist[20][1]; // Determine if it's a right hand
+
+            // Check thumb based on hand orientation
+            const isThumbRaised = isRightHand
+                ? lmlist[tipIds[0]][1] > lmlist[tipIds[0] - 1][1]
+                : lmlist[tipIds[0]][1] < lmlist[tipIds[0] - 1][1];
+            if (isThumbRaised) {
+                fingerCount += 1;
+            }
+
+            // Check other fingers
+            for (let i = 1; i < tipIds.length; i++) {
+                const isFingerRaised = lmlist[tipIds[i]][2] < lmlist[tipIds[i] - 2][2];
+                if (isFingerRaised) {
+                    fingerCount += 1;
+                }
+            }
+
+            return fingerCount;
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Draw the image from the ESP32 stream onto the canvas
+            if (esp32StreamImg.src && esp32StreamImg.naturalWidth > 0) { // Ensure image is loaded
+                if (mobileDevice) {
+                    // Rotate the canvas by 90 degrees for mobile devices
+                    canvasCtx.translate(canvasWidth / 2, canvasHeight / 2);
+                    canvasCtx.rotate(90 * Math.PI / 180);
+                    canvasCtx.translate(-canvasHeight / 2, -canvasWidth / 2);
+                    canvasCtx.drawImage(esp32StreamImg, 0, 0, canvasHeight, canvasWidth);
+                } else {
+                    // Draw normally for non-mobile devices
+                    canvasCtx.drawImage(esp32StreamImg, 0, 0, canvasWidth, canvasHeight);
+                }
+            }
+
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    const lmlist = [];
+                    for (let id = 0; id < 21; id++) {
+                        const lm = landmarks[id];
+                        let x = lm.x * canvasElement.width;
+                        let y = lm.y * canvasElement.height;
+
+                        if (mobileDevice) {
+                            // Adjust landmarks for rotated canvas
+                            x = lm.y * canvasElement.width;
+                            y = canvasElement.height - lm.x * canvasElement.height;
+                        }
+
+                        lmlist.push([id, Math.round(x), Math.round(y)]);
+                    }
+
+                    if (lmlist.length === 21) {
+                        const fingerCount = countFingers(lmlist);
+                        fingerCountDisplay.innerText = `Fingers Raised: ${fingerCount}`;
+                    }
+
+                    // Draw the landmarks and connections
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+                    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 2 });
+                }
+            } else {
+                fingerCountDisplay.innerText = 'Fingers Raised: 0'; // Reset if no hands detected
+            }
+
+            canvasCtx.restore();
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
+        });
+        hands.onResults(onResults);
+
+        // Function to start the ESP32-CAM stream and process with MediaPipe
+        function startEsp32Stream() {
+            if (streamInterval) {
+                clearInterval(streamInterval); // Clear any existing interval
+            }
+            if (!esp32IpAddress) {
+                alert('Please enter the ESP32-CAM IP address.');
+                return;
+            }
+
+            const streamUrl = `http://${esp32IpAddress}/stream`; // ESP32-CAM MJPEG stream endpoint
+
+            esp32StreamImg.src = streamUrl; // Set the source of the image to the ESP32 stream
+            esp32StreamImg.style.display = 'block'; // Make the image element visible (optional, it's drawn to canvas)
+
+            // Continuously send the image to MediaPipe for processing
+            streamInterval = setInterval(async () => {
+                if (esp32StreamImg.naturalWidth > 0) { // Only send if the image has loaded
+                    await hands.send({ image: esp32StreamImg });
+                }
+            }, 100); // Adjust interval as needed (e.g., 100ms for 10 FPS)
+        }
+
+        connectButton.addEventListener('click', () => {
+            esp32IpAddress = ipInput.value.trim();
+            if (esp32IpAddress) {
+                startEsp32Stream();
+            } else {
+                alert('Please enter a valid IP address.');
+            }
+        });
+
+        // Initialize with a default IP for testing if desired
+        // ipInput.value = 'YOUR_ESP32_CAM_IP_HERE'; // Uncomment and set for quick testing
+        // connectButton.click(); // Uncomment to auto-connect on load
+    </script>
+</body>
+</html>
